@@ -1,6 +1,6 @@
 import 'dart:developer';
+
 import 'package:book_listing_application/cubit/bookcubit.dart';
-import 'package:book_listing_application/services/apiservice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shimmer/shimmer.dart';
@@ -13,13 +13,13 @@ class BookListPage extends StatefulWidget {
 }
 
 class _BookListPageState extends State<BookListPage> {
-  late BookCubit bookCubit;
+  final BookCubit bookCubit = BookCubit();
   final ScrollController scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    bookCubit = BookCubit(ApiService());
+
     bookCubit.fetchBooks();
     scrollController.addListener(() {
       if (scrollController.position.pixels ==
@@ -32,13 +32,13 @@ class _BookListPageState extends State<BookListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Book List'),
-        ),
-        body: BlocBuilder<BookCubit, BookState>(
-          bloc: bookCubit,
+      appBar: AppBar(
+        title: const Text('Book List'),
+      ),
+      body: BlocProvider.value(
+        value: bookCubit,
+        child: BlocBuilder<BookCubit, BookState>(
           builder: (context, state) {
-            log('state: $state');
             if (state is BookLoading) {
               return _buildLoadingShimmer();
             } else if (state is BookLoaded || state is BookLoadedMore) {
@@ -58,8 +58,51 @@ class _BookListPageState extends State<BookListPage> {
                 },
               );
             } else if (state is BookError) {
-              return Center(
-                child: Text(state.message),
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      log('fetchBooks');
+                      bookCubit.fetchBooks();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                  Center(
+                    child: Text(state.message),
+                  ),
+                ],
+              );
+            } else if (state is BookNoMore) {
+              return const Center(
+                child: Text('No more books'),
+              );
+            } else if (state is BookErrorMore) {
+              return ListView.separated(
+                separatorBuilder: (context, index) => const Divider(),
+                controller: scrollController,
+                itemCount: state.books.length + 1,
+                itemBuilder: (context, index) {
+                  if (index < state.books.length) {
+                    return ListTile(
+                      title: Text(state.books[index].title),
+                      subtitle: Text(
+                          'Download Count: ${state.books[index].downloadCount}'),
+                    );
+                  }
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(state.message),
+                      TextButton(
+                        onPressed: () {
+                          bookCubit.fetchMoreBooks();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  );
+                },
               );
             } else if (state is BookLoadingMore) {
               return ListView.separated(
@@ -76,16 +119,11 @@ class _BookListPageState extends State<BookListPage> {
                   }
                   return Container(
                     height: 100,
-                    width: double.infinity,
                     child: const Center(
                       child: CircularProgressIndicator(),
                     ),
                   );
                 },
-              );
-            } else if (state is BookErrorMore) {
-              return Center(
-                child: Text(state.message),
               );
             } else {
               return const Center(
@@ -93,7 +131,9 @@ class _BookListPageState extends State<BookListPage> {
               );
             }
           },
-        ));
+        ),
+      ),
+    );
   }
 
   Widget _buildLoadingShimmer() {
